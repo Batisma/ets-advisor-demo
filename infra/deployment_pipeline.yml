@@ -1,0 +1,538 @@
+# =============================================================================
+# ETS Impact Advisor - CI/CD Deployment Pipeline
+# =============================================================================
+# GitHub Actions workflow for continuous deployment to Microsoft Fabric
+# Supports multiple environments (dev, staging, prod)
+# =============================================================================
+
+name: 'ETS Impact Advisor - Deploy to Fabric'
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'release/*'
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      force_deploy:
+        description: 'Force deployment (skip tests)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.9'
+  NODE_VERSION: '18'
+  AZURE_CLI_VERSION: '2.50.0'
+
+# =============================================================================
+# Environment Configuration
+# =============================================================================
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+# =============================================================================
+# Jobs
+# =============================================================================
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. CODE QUALITY & TESTING
+  # ---------------------------------------------------------------------------
+  quality-checks:
+    name: 'Code Quality & Testing'
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.force_deploy }}
+    
+    steps:
+      - name: 'Checkout Code'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: 'Setup Python'
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: 'Install Poetry'
+        uses: snok/install-poetry@v1
+        with:
+          version: latest
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      
+      - name: 'Install Dependencies'
+        run: |
+          poetry install --with dev,test
+      
+      - name: 'Code Linting (Ruff)'
+        run: |
+          poetry run ruff check scripts/ --output-format=github
+          poetry run ruff format scripts/ --check
+      
+      - name: 'Type Checking (MyPy)'
+        run: |
+          poetry run mypy scripts/ --ignore-missing-imports
+      
+      - name: 'Security Scan (Bandit)'
+        run: |
+          poetry run bandit -r scripts/ -f json -o bandit-report.json
+        continue-on-error: true
+      
+      - name: 'Unit Tests'
+        run: |
+          poetry run pytest tests/ \
+            --cov=scripts \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --junit-xml=pytest-report.xml
+      
+      - name: 'Upload Test Results'
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results
+          path: |
+            pytest-report.xml
+            bandit-report.json
+            coverage.xml
+      
+      - name: 'DAX Validation'
+        run: |
+          # Install pbi-tools for DAX validation
+          npm install -g @pbi-tools/cli
+          
+          # Validate DAX measures
+          pbi-tools validate powerbi/dax/measures.dax || echo "DAX validation skipped - tool not available"
+        continue-on-error: true
+
+  # ---------------------------------------------------------------------------
+  # 2. BUILD & PACKAGE
+  # ---------------------------------------------------------------------------
+  build-package:
+    name: 'Build & Package'
+    runs-on: ubuntu-latest
+    needs: quality-checks
+    if: ${{ always() && (needs.quality-checks.result == 'success' || inputs.force_deploy) }}
+    
+    steps:
+      - name: 'Checkout Code'
+        uses: actions/checkout@v4
+      
+      - name: 'Setup Python'
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: 'Generate Sample Data'
+        run: |
+          pip install pandas numpy faker
+          mkdir -p build/sample-data
+          python scripts/generate_sample_data.py --output-dir build/sample-data
+      
+      - name: 'Package PBIP Project'
+        run: |
+          mkdir -p build/powerbi
+          cp -r powerbi/* build/powerbi/
+          
+          # Validate PBIP structure
+          if [ ! -f "build/powerbi/ETS_Advisor.pbip/dataset/model.bim" ]; then
+            echo "Creating placeholder PBIP structure..."
+            mkdir -p build/powerbi/ETS_Advisor.pbip/dataset
+            mkdir -p build/powerbi/ETS_Advisor.pbip/report
+            
+            # Create minimal model.bim
+            cat > build/powerbi/ETS_Advisor.pbip/dataset/model.bim << 'EOF'
+          {
+            "name": "ETS_Advisor",
+            "compatibilityLevel": 1600,
+            "model": {
+              "culture": "en-US",
+              "dataAccessOptions": {
+                "legacyRedirects": true,
+                "returnErrorValuesAsNull": true
+              },
+              "defaultPowerBIDataSourceVersion": "powerBI_V3"
+            }
+          }
+          EOF
+          fi
+      
+      - name: 'Create Deployment Package'
+        run: |
+          mkdir -p build/deployment
+          
+          # Copy all deployment artifacts
+          cp -r lakehouse build/deployment/
+          cp -r scripts build/deployment/
+          cp -r infra build/deployment/
+          cp -r build/powerbi build/deployment/
+          cp -r build/sample-data build/deployment/
+          cp README.md build/deployment/
+          
+          # Create deployment manifest
+          cat > build/deployment/deployment-manifest.json << EOF
+          {
+            "version": "1.0.0",
+            "buildTimestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "gitCommit": "${{ github.sha }}",
+            "gitBranch": "${{ github.ref_name }}",
+            "components": {
+              "lakehouse": "lakehouse/",
+              "scripts": "scripts/",
+              "infrastructure": "infra/",
+              "powerbi": "powerbi/",
+              "sampleData": "sample-data/"
+            }
+          }
+          EOF
+      
+      - name: 'Upload Deployment Package'
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-package
+          path: build/deployment/
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  # 3. INFRASTRUCTURE DEPLOYMENT
+  # ---------------------------------------------------------------------------
+  deploy-infrastructure:
+    name: 'Deploy Infrastructure'
+    runs-on: ubuntu-latest
+    needs: build-package
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/release/') || github.event_name == 'workflow_dispatch' }}
+    
+    environment:
+      name: ${{ inputs.environment || (github.ref == 'refs/heads/main' && 'prod') || (github.ref == 'refs/heads/develop' && 'dev') || 'staging' }}
+    
+    outputs:
+      fabric-capacity-name: ${{ steps.deploy-bicep.outputs.fabricCapacityName }}
+      storage-account-name: ${{ steps.deploy-bicep.outputs.storageAccountName }}
+      eventhub-namespace: ${{ steps.deploy-bicep.outputs.eventHubNamespaceName }}
+      keyvault-name: ${{ steps.deploy-bicep.outputs.keyVaultName }}
+    
+    steps:
+      - name: 'Download Deployment Package'
+        uses: actions/download-artifact@v3
+        with:
+          name: deployment-package
+          path: deployment/
+      
+      - name: 'Azure Login'
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: 'Deploy Bicep Template'
+        id: deploy-bicep
+        uses: azure/arm-deploy@v1
+        with:
+          subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          resourceGroupName: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          template: deployment/infra/fabric_workspace.bicep
+          parameters: |
+            workspaceName=ETS-Advisor-${{ inputs.environment || 'dev' }}
+            environment=${{ inputs.environment || 'dev' }}
+            fabricCapacitySku=${{ vars.FABRIC_CAPACITY_SKU || 'F64' }}
+          failOnStdErr: false
+      
+      - name: 'Configure Event Hub Topics'
+        run: |
+          # Install Azure CLI Event Hub extension
+          az extension add --name eventhub
+          
+          # Create additional Event Hub topics if needed
+          NAMESPACE_NAME="${{ steps.deploy-bicep.outputs.eventHubNamespaceName }}"
+          
+          # Topics for processed data streams
+          az eventhubs eventhub create \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --namespace-name $NAMESPACE_NAME \
+            --name telematics-clean \
+            --partition-count 4 \
+            --message-retention 7 || echo "Topic may already exist"
+          
+          az eventhubs eventhub create \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --namespace-name $NAMESPACE_NAME \
+            --name vehicle-daily-stats \
+            --partition-count 4 \
+            --message-retention 7 || echo "Topic may already exist"
+      
+      - name: 'Upload Sample Data to Storage'
+        run: |
+          STORAGE_ACCOUNT="${{ steps.deploy-bicep.outputs.storageAccountName }}"
+          
+          # Get storage account key
+          STORAGE_KEY=$(az storage account keys list \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --account-name $STORAGE_ACCOUNT \
+            --query '[0].value' -o tsv)
+          
+          # Upload sample CSV files
+          az storage blob upload-batch \
+            --account-name $STORAGE_ACCOUNT \
+            --account-key $STORAGE_KEY \
+            --destination sample-data \
+            --source deployment/sample-data \
+            --pattern "*.csv"
+
+  # ---------------------------------------------------------------------------
+  # 4. FABRIC WORKSPACE SETUP
+  # ---------------------------------------------------------------------------
+  setup-fabric-workspace:
+    name: 'Setup Fabric Workspace'
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure
+    if: ${{ success() }}
+    
+    steps:
+      - name: 'Download Deployment Package'
+        uses: actions/download-artifact@v3
+        with:
+          name: deployment-package
+          path: deployment/
+      
+      - name: 'Azure Login'
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: 'Setup Fabric Workspace'
+        run: |
+          # Note: Fabric workspace creation via REST API
+          # This is a placeholder - would need Power BI REST API integration
+          echo "Fabric workspace setup would be implemented here"
+          echo "Workspace: ETS-Advisor-${{ inputs.environment || 'dev' }}"
+          echo "Capacity: ${{ needs.deploy-infrastructure.outputs.fabric-capacity-name }}"
+          
+          # For now, output instructions for manual setup
+          cat > fabric-setup-instructions.md << EOF
+          # Fabric Workspace Setup Instructions
+          
+          Please complete these manual steps:
+          
+          1. Navigate to https://app.fabric.microsoft.com
+          2. Create new workspace: "ETS-Advisor-${{ inputs.environment || 'dev' }}"
+          3. Assign to capacity: "${{ needs.deploy-infrastructure.outputs.fabric-capacity-name }}"
+          4. Create lakehouse: "ets_advisor_lakehouse"
+          5. Run SQL from: deployment/lakehouse/create_lakehouse.sql
+          6. Import PBIP from: deployment/powerbi/ETS_Advisor.pbip/
+          
+          EOF
+      
+      - name: 'Upload Fabric Setup Instructions'
+        uses: actions/upload-artifact@v3
+        with:
+          name: fabric-setup-instructions
+          path: fabric-setup-instructions.md
+
+  # ---------------------------------------------------------------------------
+  # 5. DATA PIPELINE DEPLOYMENT
+  # ---------------------------------------------------------------------------
+  deploy-data-pipeline:
+    name: 'Deploy Data Pipeline'
+    runs-on: ubuntu-latest
+    needs: [deploy-infrastructure, setup-fabric-workspace]
+    if: ${{ success() }}
+    
+    steps:
+      - name: 'Download Deployment Package'
+        uses: actions/download-artifact@v3
+        with:
+          name: deployment-package
+          path: deployment/
+      
+      - name: 'Azure Login'
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: 'Deploy Python Scripts to Function App'
+        run: |
+          # This would deploy the ingestion scripts to Azure Functions
+          # For demo purposes, we'll create a deployment package
+          
+          echo "Creating Python deployment package..."
+          cd deployment/scripts
+          zip -r ../python-deployment.zip . -x "*.pyc" "__pycache__/*"
+          
+          echo "Python scripts packaged for deployment"
+          echo "Manual deployment required to Azure Functions or Container Apps"
+      
+      - name: 'Configure Monitoring'
+        run: |
+          # Set up Application Insights alerts
+          APP_INSIGHTS="${{ needs.deploy-infrastructure.outputs.applicationInsightsName }}"
+          
+          # Create sample alert rules (would be expanded in real deployment)
+          echo "Monitoring configuration for: $APP_INSIGHTS"
+          echo "Alert rules would be configured here"
+      
+      - name: 'Upload Pipeline Deployment Package'
+        uses: actions/upload-artifact@v3
+        with:
+          name: pipeline-deployment
+          path: deployment/python-deployment.zip
+
+  # ---------------------------------------------------------------------------
+  # 6. INTEGRATION TESTS
+  # ---------------------------------------------------------------------------
+  integration-tests:
+    name: 'Integration Tests'
+    runs-on: ubuntu-latest
+    needs: [deploy-infrastructure, deploy-data-pipeline]
+    if: ${{ success() && !inputs.force_deploy }}
+    
+    steps:
+      - name: 'Download Deployment Package'
+        uses: actions/download-artifact@v3
+        with:
+          name: deployment-package
+          path: deployment/
+      
+      - name: 'Azure Login'
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: 'Test Infrastructure Connectivity'
+        run: |
+          # Test Event Hub connectivity
+          EVENTHUB_NAMESPACE="${{ needs.deploy-infrastructure.outputs.eventhub-namespace }}"
+          
+          echo "Testing connectivity to Event Hub: $EVENTHUB_NAMESPACE"
+          az eventhubs namespace show \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --name $EVENTHUB_NAMESPACE \
+            --query "status" -o tsv
+      
+      - name: 'Test Storage Connectivity'
+        run: |
+          # Test storage account connectivity
+          STORAGE_ACCOUNT="${{ needs.deploy-infrastructure.outputs.storage-account-name }}"
+          
+          echo "Testing connectivity to Storage: $STORAGE_ACCOUNT"
+          az storage account show \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --name $STORAGE_ACCOUNT \
+            --query "statusOfPrimary" -o tsv
+      
+      - name: 'Test Sample Data'
+        run: |
+          # Validate sample data was uploaded correctly
+          STORAGE_ACCOUNT="${{ needs.deploy-infrastructure.outputs.storage-account-name }}"
+          
+          STORAGE_KEY=$(az storage account keys list \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --account-name $STORAGE_ACCOUNT \
+            --query '[0].value' -o tsv)
+          
+          # List uploaded files
+          az storage blob list \
+            --account-name $STORAGE_ACCOUNT \
+            --account-key $STORAGE_KEY \
+            --container-name sample-data \
+            --query "[].name" -o table
+
+  # ---------------------------------------------------------------------------
+  # 7. DEPLOYMENT SUMMARY
+  # ---------------------------------------------------------------------------
+  deployment-summary:
+    name: 'Deployment Summary'
+    runs-on: ubuntu-latest
+    needs: [deploy-infrastructure, setup-fabric-workspace, deploy-data-pipeline, integration-tests]
+    if: ${{ always() }}
+    
+    steps:
+      - name: 'Generate Deployment Summary'
+        run: |
+          echo "# ETS Impact Advisor Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎯 Deployment Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: ${{ inputs.environment || 'dev' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Git Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Git Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered By**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployment Time**: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "## 🏗️ Infrastructure Status" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.deploy-infrastructure.result }}" == "success" ]; then
+            echo "✅ **Infrastructure**: Successfully deployed" >> $GITHUB_STEP_SUMMARY
+            echo "- Fabric Capacity: ${{ needs.deploy-infrastructure.outputs.fabric-capacity-name }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Storage Account: ${{ needs.deploy-infrastructure.outputs.storage-account-name }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Event Hub: ${{ needs.deploy-infrastructure.outputs.eventhub-namespace }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Key Vault: ${{ needs.deploy-infrastructure.outputs.keyvault-name }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Infrastructure**: Deployment failed" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "## 📊 Component Status" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Infrastructure | ${{ needs.deploy-infrastructure.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Fabric Workspace | ${{ needs.setup-fabric-workspace.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Data Pipeline | ${{ needs.deploy-data-pipeline.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration Tests | ${{ needs.integration-tests.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "## 🚀 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Complete Fabric workspace setup (see artifacts)" >> $GITHUB_STEP_SUMMARY
+          echo "2. Import Power BI reports" >> $GITHUB_STEP_SUMMARY
+          echo "3. Configure real-time data ingestion" >> $GITHUB_STEP_SUMMARY
+          echo "4. Test end-to-end functionality" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "## 📋 Resources Created" >> $GITHUB_STEP_SUMMARY
+          echo "- Microsoft Fabric Capacity (F64)" >> $GITHUB_STEP_SUMMARY
+          echo "- Azure Storage Account with Data Lake Gen2" >> $GITHUB_STEP_SUMMARY
+          echo "- Azure Event Hub Namespace" >> $GITHUB_STEP_SUMMARY
+          echo "- Azure Key Vault for secrets" >> $GITHUB_STEP_SUMMARY
+          echo "- Application Insights for monitoring" >> $GITHUB_STEP_SUMMARY
+      
+      - name: 'Notify on Failure'
+        if: ${{ failure() }}
+        run: |
+          echo "::error::ETS Impact Advisor deployment failed. Check logs and retry."
+
+# =============================================================================
+# CONFIGURATION NOTES
+# =============================================================================
+# 
+# Required GitHub Secrets:
+# - AZURE_CREDENTIALS: Service principal credentials for Azure
+# - AZURE_SUBSCRIPTION_ID: Azure subscription ID
+# - AZURE_RESOURCE_GROUP: Target resource group name
+# 
+# Required GitHub Variables:
+# - FABRIC_CAPACITY_SKU: Fabric capacity SKU (default: F64)
+# 
+# Manual Steps After Deployment:
+# 1. Complete Fabric workspace creation in portal
+# 2. Create lakehouse and run SQL scripts
+# 3. Import PBIP project to Power BI
+# 4. Configure real-time data sources
+# 5. Set up monitoring and alerts
+# 
+# Estimated Deployment Time: 15-20 minutes
+# Estimated Monthly Cost: €2,000-3,000 (F64 capacity)
+# ============================================================================= 

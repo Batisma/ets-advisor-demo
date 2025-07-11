@@ -1,0 +1,374 @@
+// =============================================================================
+// ETS Impact Advisor - Calculation Groups & What-If Parameters
+// =============================================================================
+// Defines calculation groups and what-if parameters for interactive analysis
+// Compatible with Direct Lake semantic model
+// =============================================================================
+
+// =============================================================================
+// 1. WHAT-IF PARAMETER: ETS PRICE SLIDER
+// =============================================================================
+// Creates interactive slider for ETS price simulation
+// Range: €50-150 per tonne, Default: €85, Step: €1
+
+// Table: ETS Price Parameter
+// Columns: ETS Price Parameter, ETS Price Parameter Value, ETS Price Parameter Order
+
+// Data for ETS Price Parameter table:
+// ETS Price Parameter Value | ETS Price Parameter | ETS Price Parameter Order
+// 50                       | €50/t              | 1
+// 51                       | €51/t              | 2
+// 52                       | €52/t              | 3
+// ...
+// 85                       | €85/t              | 36  (Default)
+// ...
+// 150                      | €150/t             | 101
+
+// Calculation for ETS Price Parameter display column:
+[ETS Price Parameter] = "€" & FORMAT([ETS Price Parameter Value], "0") & "/t"
+
+// =============================================================================
+// 2. FIELD PARAMETER: SCENARIO SELECTOR
+// =============================================================================
+// Creates dropdown for scenario selection
+
+// Table: Scenario Parameter
+// Columns: Scenario Parameter, Scenario Parameter Fields, Scenario Parameter Order
+
+// Scenario Parameter data:
+// Scenario Parameter | Scenario Parameter Fields | Scenario Parameter Order
+// "Scenario A"      | "A"                       | 1
+// "Scenario B"      | "B"                       | 2  
+// "Scenario C"      | "C"                       | 3
+
+// =============================================================================
+// 3. CALCULATION GROUP: TIME INTELLIGENCE
+// =============================================================================
+// Provides time-based calculations for comparison analysis
+
+// Table: Time Intelligence
+// Columns: Time Intelligence, Time Intelligence Order
+
+// Calculation Items:
+// Current Period | 1 | SELECTEDMEASURE()
+// Previous Month | 2 | CALCULATE(SELECTEDMEASURE(), DATEADD('Date'[Date], -1, MONTH))
+// Previous Quarter | 3 | CALCULATE(SELECTEDMEASURE(), DATEADD('Date'[Date], -1, QUARTER))
+// Previous Year | 4 | CALCULATE(SELECTEDMEASURE(), DATEADD('Date'[Date], -1, YEAR))
+// YTD | 5 | TOTALYTD(SELECTEDMEASURE(), 'Date'[Date])
+// MTD | 6 | TOTALMTD(SELECTEDMEASURE(), 'Date'[Date])
+// QTD | 7 | TOTALQTD(SELECTEDMEASURE(), 'Date'[Date])
+
+// Current Period calculation:
+[Current Period] = SELECTEDMEASURE()
+
+// Previous Month calculation:
+[Previous Month] = CALCULATE(SELECTEDMEASURE(), DATEADD('Date'[Date], -1, MONTH))
+
+// Previous Quarter calculation:
+[Previous Quarter] = CALCULATE(SELECTEDMEASURE(), DATEADD('Date'[Date], -1, QUARTER))
+
+// Previous Year calculation:
+[Previous Year] = CALCULATE(SELECTEDMEASURE(), DATEADD('Date'[Date], -1, YEAR))
+
+// Year-to-Date calculation:
+[YTD] = TOTALYTD(SELECTEDMEASURE(), 'Date'[Date])
+
+// Month-to-Date calculation:
+[MTD] = TOTALMTD(SELECTEDMEASURE(), 'Date'[Date])
+
+// Quarter-to-Date calculation:
+[QTD] = TOTALQTD(SELECTEDMEASURE(), 'Date'[Date])
+
+// =============================================================================
+// 4. CALCULATION GROUP: SCENARIO COMPARISON
+// =============================================================================
+// Enables comparison of different fleet electrification scenarios
+
+// Table: Scenario Comparison
+// Columns: Scenario Comparison, Scenario Comparison Order
+
+// Calculation Items:
+// Scenario A | 1 | CALCULATE(SELECTEDMEASURE(), ScenarioRun[ScenarioID] = "A")
+// Scenario B | 2 | CALCULATE(SELECTEDMEASURE(), ScenarioRun[ScenarioID] = "B")
+// Scenario C | 3 | CALCULATE(SELECTEDMEASURE(), ScenarioRun[ScenarioID] = "C")
+// Best Scenario | 4 | [Best Scenario Logic]
+// Worst Scenario | 5 | [Worst Scenario Logic]
+
+// Scenario A calculation:
+[Scenario A] = CALCULATE(SELECTEDMEASURE(), ScenarioRun[ScenarioID] = "A")
+
+// Scenario B calculation:
+[Scenario B] = CALCULATE(SELECTEDMEASURE(), ScenarioRun[ScenarioID] = "B")
+
+// Scenario C calculation:
+[Scenario C] = CALCULATE(SELECTEDMEASURE(), ScenarioRun[ScenarioID] = "C")
+
+// Best Scenario calculation:
+[Best Scenario] = 
+VAR ScenarioA = CALCULATE(SELECTEDMEASURE(), ScenarioRun[ScenarioID] = "A")
+VAR ScenarioB = CALCULATE(SELECTEDMEASURE(), ScenarioRun[ScenarioID] = "B")
+VAR ScenarioC = CALCULATE(SELECTEDMEASURE(), ScenarioRun[ScenarioID] = "C")
+VAR BestValue = MAX(ScenarioA, MAX(ScenarioB, ScenarioC))
+RETURN BestValue
+
+// Worst Scenario calculation:
+[Worst Scenario] = 
+VAR ScenarioA = CALCULATE(SELECTEDMEASURE(), ScenarioRun[ScenarioID] = "A")
+VAR ScenarioB = CALCULATE(SELECTEDMEASURE(), ScenarioRun[ScenarioID] = "B")
+VAR ScenarioC = CALCULATE(SELECTEDMEASURE(), ScenarioRun[ScenarioID] = "C")
+VAR WorstValue = MIN(ScenarioA, MIN(ScenarioB, ScenarioC))
+RETURN WorstValue
+
+// =============================================================================
+// 5. CALCULATION GROUP: VARIANCE ANALYSIS
+// =============================================================================
+// Provides variance calculations for performance analysis
+
+// Table: Variance Analysis
+// Columns: Variance Analysis, Variance Analysis Order
+
+// Calculation Items:
+// Actual | 1 | SELECTEDMEASURE()
+// Budget | 2 | [Budget Version]
+// Variance | 3 | [Variance Calculation]
+// Variance % | 4 | [Variance Percentage]
+
+// Actual calculation:
+[Actual] = SELECTEDMEASURE()
+
+// Budget calculation (using multiplier for demo):
+[Budget] = SELECTEDMEASURE() * 1.1  // 10% higher than actual for demo
+
+// Variance calculation:
+[Variance] = SELECTEDMEASURE() - (SELECTEDMEASURE() * 1.1)
+
+// Variance percentage:
+[Variance %] = 
+VAR Actual = SELECTEDMEASURE()
+VAR Budget = SELECTEDMEASURE() * 1.1
+RETURN DIVIDE(Actual - Budget, Budget, 0)
+
+// =============================================================================
+// 6. CALCULATION GROUP: EFFICIENCY METRICS
+// =============================================================================
+// Groups efficiency-related calculations
+
+// Table: Efficiency Metrics
+// Columns: Efficiency Metrics, Efficiency Metrics Order
+
+// Calculation Items:
+// Per Vehicle | 1 | DIVIDE(SELECTEDMEASURE(), [Fleet Size], 0)
+// Per 100km | 2 | DIVIDE(SELECTEDMEASURE(), [Total Distance (km)] / 100, 0)
+// Per Trip | 3 | DIVIDE(SELECTEDMEASURE(), [Total Trips], 0)
+// Per Day | 4 | [Per Day Calculation]
+// Per Month | 5 | [Per Month Calculation]
+
+// Per Vehicle calculation:
+[Per Vehicle] = DIVIDE(SELECTEDMEASURE(), [Fleet Size], 0)
+
+// Per 100km calculation:
+[Per 100km] = DIVIDE(SELECTEDMEASURE(), [Total Distance (km)] / 100, 0)
+
+// Per Trip calculation:
+[Per Trip] = DIVIDE(SELECTEDMEASURE(), [Total Trips], 0)
+
+// Per Day calculation:
+[Per Day] = 
+VAR Days = DATEDIFF(MIN(TripFacts[StartTimeUTC]), MAX(TripFacts[StartTimeUTC]), DAY)
+RETURN DIVIDE(SELECTEDMEASURE(), Days, 0)
+
+// Per Month calculation:
+[Per Month] = 
+VAR Months = DATEDIFF(MIN(TripFacts[StartTimeUTC]), MAX(TripFacts[StartTimeUTC]), MONTH)
+RETURN DIVIDE(SELECTEDMEASURE(), Months, 0)
+
+// =============================================================================
+// 7. ADVANCED WHAT-IF PARAMETERS
+// =============================================================================
+
+// Fuel Price Sensitivity Parameter
+// Table: Fuel Price Parameter
+// Range: €1.00-2.00 per liter, Default: €1.45, Step: €0.05
+
+[Fuel Price Parameter] = "€" & FORMAT([Fuel Price Parameter Value], "0.00") & "/L"
+
+// Fleet Size What-If Parameter
+// Table: Fleet Size Parameter
+// Range: 20-100 vehicles, Default: 40, Step: 5
+
+[Fleet Size Parameter] = FORMAT([Fleet Size Parameter Value], "0") & " vehicles"
+
+// Efficiency Target Parameter
+// Table: Efficiency Target Parameter
+// Range: 20-35 L/100km, Default: 28, Step: 1
+
+[Efficiency Target Parameter] = FORMAT([Efficiency Target Parameter Value], "0") & " L/100km"
+
+// =============================================================================
+// 8. CONDITIONAL FORMATTING CALCULATION GROUP
+// =============================================================================
+// Provides color coding for visuals
+
+// Table: Conditional Formatting
+// Columns: Conditional Formatting, Conditional Formatting Order
+
+// Green (Good Performance):
+[Green] = 
+VAR Value = SELECTEDMEASURE()
+VAR Threshold = [Performance Threshold]
+RETURN IF(Value >= Threshold, Value, BLANK())
+
+// Yellow (Moderate Performance):
+[Yellow] = 
+VAR Value = SELECTEDMEASURE()
+VAR HighThreshold = [Performance Threshold]
+VAR LowThreshold = [Performance Threshold] * 0.8
+RETURN IF(Value >= LowThreshold && Value < HighThreshold, Value, BLANK())
+
+// Red (Poor Performance):
+[Red] = 
+VAR Value = SELECTEDMEASURE()
+VAR Threshold = [Performance Threshold] * 0.8
+RETURN IF(Value < Threshold, Value, BLANK())
+
+// =============================================================================
+// 9. UTILITY CALCULATION GROUP
+// =============================================================================
+// Provides utility calculations for report building
+
+// Table: Utility Calculations
+// Columns: Utility Calculations, Utility Calculations Order
+
+// Rank calculation:
+[Rank] = 
+RANKX(
+    ALL(TripFacts[VIN]),
+    CALCULATE(SELECTEDMEASURE()),
+    ,
+    DESC
+)
+
+// Percentage of Total:
+[% of Total] = 
+DIVIDE(
+    SELECTEDMEASURE(),
+    CALCULATE(SELECTEDMEASURE(), ALL()),
+    0
+)
+
+// Running Total:
+[Running Total] = 
+CALCULATE(
+    SELECTEDMEASURE(),
+    FILTER(
+        ALL('Date'[Date]),
+        'Date'[Date] <= MAX('Date'[Date])
+    )
+)
+
+// Moving Average (3-period):
+[Moving Average 3] = 
+AVERAGEX(
+    DATESINPERIOD('Date'[Date], LASTDATE('Date'[Date]), -3, MONTH),
+    SELECTEDMEASURE()
+)
+
+// =============================================================================
+// 10. HELPER MEASURES FOR PARAMETERS
+// =============================================================================
+
+// Current parameter values
+[Current ETS Price] = 
+VAR SelectedPrice = SELECTEDVALUE('ETS Price Parameter'[ETS Price Parameter Value])
+RETURN IF(ISBLANK(SelectedPrice), 85, SelectedPrice)
+
+[Current Scenario] = 
+VAR SelectedScenario = SELECTEDVALUE('Scenario Parameter'[Scenario Parameter Fields])
+RETURN IF(ISBLANK(SelectedScenario), "B", SelectedScenario)
+
+[Current Fuel Price] = 
+VAR SelectedPrice = SELECTEDVALUE('Fuel Price Parameter'[Fuel Price Parameter Value])
+RETURN IF(ISBLANK(SelectedPrice), 1.45, SelectedPrice)
+
+// Parameter validation
+[Parameter Validation] = 
+VAR ETSPrice = [Current ETS Price]
+VAR FuelPrice = [Current Fuel Price]
+VAR Scenario = [Current Scenario]
+RETURN 
+IF(
+    AND(
+        AND(ETSPrice >= 50, ETSPrice <= 150),
+        AND(FuelPrice >= 1.00, FuelPrice <= 2.00)
+    ),
+    "✅ Valid",
+    "❌ Invalid Parameters"
+)
+
+// =============================================================================
+// 11. AGGREGATION CALCULATION GROUP
+// =============================================================================
+// Provides different aggregation methods
+
+// Table: Aggregation Methods
+// Columns: Aggregation Methods, Aggregation Methods Order
+
+// Sum:
+[Sum] = SELECTEDMEASURE()
+
+// Average:
+[Average] = AVERAGEX(VALUES(TripFacts[VIN]), SELECTEDMEASURE())
+
+// Minimum:
+[Minimum] = MINX(VALUES(TripFacts[VIN]), SELECTEDMEASURE())
+
+// Maximum:
+[Maximum] = MAXX(VALUES(TripFacts[VIN]), SELECTEDMEASURE())
+
+// Median:
+[Median] = MEDIANX(VALUES(TripFacts[VIN]), SELECTEDMEASURE())
+
+// Standard Deviation:
+[Standard Deviation] = STDEV.P(SELECTEDMEASURE())
+
+// =============================================================================
+// 12. IMPLEMENTATION NOTES
+// =============================================================================
+
+/*
+Implementation Guide:
+
+1. Create What-If Parameters:
+   - Go to Power BI Desktop > Modeling > New Parameter
+   - Set ranges and default values as specified above
+   - Parameters will auto-create tables and measures
+
+2. Create Field Parameters:
+   - Go to Modeling > New Parameter > Fields
+   - Select relevant fields for scenario comparison
+   - Configure display names and order
+
+3. Create Calculation Groups:
+   - Use Tabular Editor or Power BI Desktop
+   - Create calculation group tables with specified columns
+   - Add calculation items with DAX expressions above
+
+4. Apply to Visuals:
+   - Drag parameters to slicers for interactivity
+   - Use calculation groups in matrix row/column areas
+   - Apply conditional formatting using color measures
+
+5. Testing:
+   - Verify parameter ranges work correctly
+   - Test calculation group interactions
+   - Validate Direct Lake compatibility
+
+6. Performance Optimization:
+   - Use variables to avoid repeated calculations
+   - Implement proper filter contexts
+   - Test with large datasets to ensure responsiveness
+*/
+
+// =============================================================================
+// End of Calculation Groups & Parameters
+// ============================================================================= 

@@ -1,0 +1,4 @@
+ScenarioID,ScenarioName,TimeHorizon_months,VehiclesReplaced,CapEx_EUR,OpEx_EUR,CO2_Reduction_t,ETS_Savings_EUR,NPV_EUR,ROI_Percent,Payback_Years
+A,Conservative Replacement,60,10,1800000,112500.0,892.5,75862.5,-1649584.63,-91.6,47.8
+B,Aggressive Electrification,60,25,4000000,412500.0,2310.0,196350.0,-3513807.7,-87.8,32.8
+C,Hybrid Approach,60,15,2100000,202500.0,1181.25,100406.25,-1858116.64,-88.5,34.7

@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "artifacts": [
+    {
+      "report": {
+        "path": "report.json",
+        "mode": "PBIR"
+      }
+    },
+    {
+      "dataset": {
+        "path": "model.bim",
+        "mode": "PBIDS"
+      }
+    }
+  ]
+} 

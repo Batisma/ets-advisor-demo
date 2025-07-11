@@ -1,0 +1,413 @@
+{
+  "name": "ETS_Advisor",
+  "compatibilityLevel": 1600,
+  "model": {
+    "culture": "en-US",
+    "dataAccessOptions": {
+      "legacyRedirects": true,
+      "returnErrorValuesAsNull": true
+    },
+    "defaultPowerBIDataSourceVersion": "powerBI_V3",
+    "sourceQueryCulture": "en-US",
+    "tables": [
+      {
+        "name": "TripFacts",
+        "mode": "directLake",
+        "source": {
+          "type": "entity",
+          "entityName": "TripFacts",
+          "expressionSource": "DatabaseQuery"
+        },
+        "columns": [
+          {
+            "name": "TripID",
+            "dataType": "string",
+            "sourceColumn": "TripID"
+          },
+          {
+            "name": "VIN",
+            "dataType": "string",
+            "sourceColumn": "VIN"
+          },
+          {
+            "name": "StartTimeUTC",
+            "dataType": "dateTime",
+            "sourceColumn": "StartTimeUTC"
+          },
+          {
+            "name": "EndTimeUTC",
+            "dataType": "dateTime",
+            "sourceColumn": "EndTimeUTC"
+          },
+          {
+            "name": "Distance_km",
+            "dataType": "double",
+            "sourceColumn": "Distance_km"
+          },
+          {
+            "name": "Fuel_l",
+            "dataType": "double",
+            "sourceColumn": "Fuel_l"
+          },
+          {
+            "name": "StartLat",
+            "dataType": "double",
+            "sourceColumn": "StartLat"
+          },
+          {
+            "name": "StartLon",
+            "dataType": "double",
+            "sourceColumn": "StartLon"
+          },
+          {
+            "name": "EndLat",
+            "dataType": "double",
+            "sourceColumn": "EndLat"
+          },
+          {
+            "name": "EndLon",
+            "dataType": "double",
+            "sourceColumn": "EndLon"
+          },
+          {
+            "name": "TripDate",
+            "dataType": "dateTime",
+            "sourceColumn": "TripDate"
+          }
+        ]
+      },
+      {
+        "name": "FuelInvoices",
+        "mode": "directLake",
+        "source": {
+          "type": "entity",
+          "entityName": "FuelInvoices",
+          "expressionSource": "DatabaseQuery"
+        },
+        "columns": [
+          {
+            "name": "VIN",
+            "dataType": "string",
+            "sourceColumn": "VIN"
+          },
+          {
+            "name": "InvoiceMonth",
+            "dataType": "dateTime",
+            "sourceColumn": "InvoiceMonth"
+          },
+          {
+            "name": "Litres",
+            "dataType": "double",
+            "sourceColumn": "Litres"
+          },
+          {
+            "name": "EUR_Amount",
+            "dataType": "double",
+            "sourceColumn": "EUR_Amount"
+          },
+          {
+            "name": "EUR_per_Litre",
+            "dataType": "double",
+            "sourceColumn": "EUR_per_Litre"
+          },
+          {
+            "name": "InvoiceNumber",
+            "dataType": "string",
+            "sourceColumn": "InvoiceNumber"
+          },
+          {
+            "name": "SupplierName",
+            "dataType": "string",
+            "sourceColumn": "SupplierName"
+          }
+        ]
+      },
+      {
+        "name": "ETSPriceCurve",
+        "mode": "directLake",
+        "source": {
+          "type": "entity",
+          "entityName": "ETSPriceCurve",
+          "expressionSource": "DatabaseQuery"
+        },
+        "columns": [
+          {
+            "name": "PriceMonth",
+            "dataType": "dateTime",
+            "sourceColumn": "PriceMonth"
+          },
+          {
+            "name": "EUR_per_t",
+            "dataType": "double",
+            "sourceColumn": "EUR_per_t"
+          },
+          {
+            "name": "PriceSource",
+            "dataType": "string",
+            "sourceColumn": "PriceSource"
+          }
+        ]
+      },
+      {
+        "name": "ScenarioRun",
+        "mode": "directLake",
+        "source": {
+          "type": "entity",
+          "entityName": "ScenarioRun",
+          "expressionSource": "DatabaseQuery"
+        },
+        "columns": [
+          {
+            "name": "ScenarioID",
+            "dataType": "string",
+            "sourceColumn": "ScenarioID"
+          },
+          {
+            "name": "ScenarioName",
+            "dataType": "string",
+            "sourceColumn": "ScenarioName"
+          },
+          {
+            "name": "TimeHorizon_months",
+            "dataType": "int64",
+            "sourceColumn": "TimeHorizon_months"
+          },
+          {
+            "name": "VehiclesReplaced",
+            "dataType": "int64",
+            "sourceColumn": "VehiclesReplaced"
+          },
+          {
+            "name": "CapEx_EUR",
+            "dataType": "double",
+            "sourceColumn": "CapEx_EUR"
+          },
+          {
+            "name": "OpEx_EUR",
+            "dataType": "double",
+            "sourceColumn": "OpEx_EUR"
+          },
+          {
+            "name": "CO2_Reduction_t",
+            "dataType": "double",
+            "sourceColumn": "CO2_Reduction_t"
+          },
+          {
+            "name": "ETS_Savings_EUR",
+            "dataType": "double",
+            "sourceColumn": "ETS_Savings_EUR"
+          },
+          {
+            "name": "NPV_EUR",
+            "dataType": "double",
+            "sourceColumn": "NPV_EUR"
+          },
+          {
+            "name": "ROI_Percent",
+            "dataType": "double",
+            "sourceColumn": "ROI_Percent"
+          },
+          {
+            "name": "Payback_Years",
+            "dataType": "double",
+            "sourceColumn": "Payback_Years"
+          }
+        ]
+      },
+      {
+        "name": "'Date'",
+        "dataCategory": "Time",
+        "columns": [
+          {
+            "name": "Date",
+            "dataType": "dateTime",
+            "isKey": true,
+            "expression": "CALENDAR(DATE(2024,1,1), DATE(2030,12,31))"
+          },
+          {
+            "name": "Year",
+            "dataType": "int64",
+            "expression": "YEAR('Date'[Date])"
+          },
+          {
+            "name": "Quarter",
+            "dataType": "string",
+            "expression": "\"Q\" & QUARTER('Date'[Date])"
+          },
+          {
+            "name": "Month",
+            "dataType": "int64",
+            "expression": "MONTH('Date'[Date])"
+          },
+          {
+            "name": "MonthName",
+            "dataType": "string",
+            "expression": "FORMAT('Date'[Date], \"MMMM\")"
+          },
+          {
+            "name": "DayOfWeek",
+            "dataType": "int64",
+            "expression": "WEEKDAY('Date'[Date])"
+          }
+        ]
+      },
+      {
+        "name": "ETS Price Parameter",
+        "calculationGroup": {
+          "precedence": 20
+        },
+        "columns": [
+          {
+            "name": "ETS Price Parameter",
+            "dataType": "string",
+            "sourceColumn": "Name"
+          },
+          {
+            "name": "ETS Price Parameter Value",
+            "dataType": "int64",
+            "sourceColumn": "Value"
+          },
+          {
+            "name": "ETS Price Parameter Order",
+            "dataType": "int64",
+            "sourceColumn": "Ordinal"
+          }
+        ],
+        "partitions": [
+          {
+            "name": "ETS Price Parameter",
+            "mode": "import",
+            "source": {
+              "type": "calculated",
+              "expression": "GENERATESERIES(50, 150, 1)"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Scenario Parameter",
+        "calculationGroup": {
+          "precedence": 10
+        },
+        "columns": [
+          {
+            "name": "Scenario Parameter",
+            "dataType": "string",
+            "sourceColumn": "Name"
+          },
+          {
+            "name": "Scenario Parameter Fields",
+            "dataType": "string",
+            "sourceColumn": "Fields"
+          },
+          {
+            "name": "Scenario Parameter Order",
+            "dataType": "int64",
+            "sourceColumn": "Ordinal"
+          }
+        ],
+        "partitions": [
+          {
+            "name": "Scenario Parameter",
+            "mode": "import",
+            "source": {
+              "type": "m",
+              "expression": "#table(\n  {\"Name\", \"Fields\", \"Ordinal\"},\n  {\n    {\"Scenario A\", \"A\", 1},\n    {\"Scenario B\", \"B\", 2},\n    {\"Scenario C\", \"C\", 3}\n  }\n)"
+            }
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "name": "TripFacts-FuelInvoices",
+        "fromTable": "TripFacts",
+        "fromColumn": "VIN",
+        "toTable": "FuelInvoices",
+        "toColumn": "VIN",
+        "crossFilteringBehavior": "bothDirections"
+      },
+      {
+        "name": "TripFacts-Date",
+        "fromTable": "TripFacts",
+        "fromColumn": "TripDate",
+        "toTable": "'Date'",
+        "toColumn": "Date"
+      },
+      {
+        "name": "ETSPriceCurve-Date",
+        "fromTable": "ETSPriceCurve",
+        "fromColumn": "PriceMonth",
+        "toTable": "'Date'",
+        "toColumn": "Date"
+      }
+    ],
+    "measures": [
+      {
+        "name": "Total Trips",
+        "expression": "COUNTROWS(TripFacts)"
+      },
+      {
+        "name": "Fleet Size",
+        "expression": "DISTINCTCOUNT(TripFacts[VIN])"
+      },
+      {
+        "name": "Total Distance (km)",
+        "expression": "SUMX(TripFacts, TripFacts[Distance_km])"
+      },
+      {
+        "name": "Total Fuel (L)",
+        "expression": "SUMX(TripFacts, TripFacts[Fuel_l])"
+      },
+      {
+        "name": "CO2 Emissions (t)",
+        "expression": "DIVIDE(SUMX(TripFacts, TripFacts[Fuel_l] * 2.68), 1000, 0)"
+      },
+      {
+        "name": "Current ETS Price",
+        "expression": "VAR SelectedPrice = SELECTEDVALUE('ETS Price Parameter'[ETS Price Parameter Value])\nVAR DefaultPrice = 85.0\nRETURN\nIF(ISBLANK(SelectedPrice), DefaultPrice, SelectedPrice)"
+      },
+      {
+        "name": "ETS Cost (EUR)",
+        "expression": "[CO2 Emissions (t)] * [Current ETS Price]"
+      },
+      {
+        "name": "Fleet Efficiency (L/100km)",
+        "expression": "DIVIDE([Total Fuel (L)], [Total Distance (km)] / 100, 0)"
+      },
+      {
+        "name": "Selected Scenario",
+        "expression": "SELECTEDVALUE('Scenario Parameter'[Scenario Parameter Fields])"
+      },
+      {
+        "name": "Scenario NPV",
+        "expression": "VAR CurrentScenario = [Selected Scenario]\nVAR ScenarioData = FILTER(ScenarioRun, ScenarioRun[ScenarioID] = CurrentScenario)\nRETURN\nSUMX(ScenarioData, ScenarioRun[NPV_EUR])"
+      },
+      {
+        "name": "Scenario ROI",
+        "expression": "VAR CurrentScenario = [Selected Scenario]\nVAR ScenarioData = FILTER(ScenarioRun, ScenarioRun[ScenarioID] = CurrentScenario)\nRETURN\nAVERAGEX(ScenarioData, ScenarioRun[ROI_Percent])"
+      }
+    ],
+    "annotations": [
+      {
+        "name": "PBIDesktopVersion",
+        "value": "2.125.1018.0 (23.12)"
+      },
+      {
+        "name": "PBI_QueryOrder",
+        "value": "[\"TripFacts\",\"FuelInvoices\",\"ETSPriceCurve\",\"ScenarioRun\",\"'Date'\"]"
+      },
+      {
+        "name": "TabularEditor_SerializeOptions",
+        "value": "{\"IgnoreInferredObjects\":true,\"IgnoreInferredProperties\":true,\"IgnoreTimestamps\":true,\"SplitMultilineStrings\":true,\"PrefixFilenames\":false,\"LocalTranslations\":false,\"LocalPerspectives\":false,\"LocalRelationships\":false,\"Levels\":[\"Data Sources\",\"Shared Expressions\",\"Perspectives\",\"Relationships\",\"Roles\",\"Tables\",\"Tables/Columns\",\"Tables/Hierarchies\",\"Tables/Measures\",\"Tables/Partitions\",\"Tables/Calculation Items\",\"Translations\"]}"
+      }
+    ]
+  },
+  "expressions": [
+    {
+      "name": "DatabaseQuery",
+      "kind": "m",
+      "expression": "let\n    Source = Fabric.Lakehouse(\n        [workspaceId=\"YOUR_WORKSPACE_ID\", lakehouseId=\"YOUR_LAKEHOUSE_ID\"]\n    )\nin\n    Source"
+    }
+  ]
+} 

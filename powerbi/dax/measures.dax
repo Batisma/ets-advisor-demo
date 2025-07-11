@@ -1,0 +1,324 @@
+// =============================================================================
+// ETS Impact Advisor - DAX Measures
+// =============================================================================
+// Core measures for the ETS Impact Advisor Power BI semantic model
+// Direct Lake compatibility: Uses efficient DAX patterns
+// =============================================================================
+
+// =============================================================================
+// 1. FLEET OVERVIEW MEASURES
+// =============================================================================
+
+// Total trips across all vehicles
+[Total Trips] = COUNTROWS(TripFacts)
+
+// Unique vehicles in fleet
+[Fleet Size] = DISTINCTCOUNT(TripFacts[VIN])
+
+// Total distance traveled
+[Total Distance (km)] = SUMX(TripFacts, TripFacts[Distance_km])
+
+// Average distance per trip
+[Avg Distance per Trip] = DIVIDE([Total Distance (km)], [Total Trips], 0)
+
+// Total fuel consumed
+[Total Fuel (L)] = SUMX(TripFacts, TripFacts[Fuel_l])
+
+// Fleet fuel efficiency
+[Fleet Efficiency (L/100km)] = DIVIDE([Total Fuel (L)], [Total Distance (km)] / 100, 0)
+
+// =============================================================================
+// 2. CARBON FOOTPRINT MEASURES
+// =============================================================================
+
+// CO2 emissions calculation (2.68 kg CO2 per liter diesel)
+[CO2 Emissions (kg)] = SUMX(TripFacts, TripFacts[Fuel_l] * 2.68)
+
+// CO2 emissions in tonnes
+[CO2 Emissions (t)] = DIVIDE([CO2 Emissions (kg)], 1000, 0)
+
+// CO2 per kilometer
+[CO2 per km (g)] = DIVIDE([CO2 Emissions (kg)] * 1000, [Total Distance (km)], 0)
+
+// Monthly CO2 emissions
+[Monthly CO2 (t)] = 
+VAR CurrentMonth = SELECTEDVALUE('Date'[Month])
+VAR FilteredTrips = FILTER(TripFacts, MONTH(TripFacts[StartTimeUTC]) = CurrentMonth)
+RETURN
+SUMX(FilteredTrips, FilteredTrips[Fuel_l] * 2.68 / 1000)
+
+// =============================================================================
+// 3. ETS COST MEASURES
+// =============================================================================
+
+// Current ETS price (uses what-if parameter or default)
+[Current ETS Price] = 
+VAR WhatIfPrice = SELECTEDVALUE('ETS Price Parameter'[ETS Price Parameter Value])
+VAR DefaultPrice = 85.0
+RETURN
+IF(ISBLANK(WhatIfPrice), DefaultPrice, WhatIfPrice)
+
+// ETS cost calculation
+[ETS Cost (EUR)] = [CO2 Emissions (t)] * [Current ETS Price]
+
+// Monthly ETS cost
+[Monthly ETS Cost] = 
+VAR CurrentMonth = SELECTEDVALUE('Date'[Month])
+VAR MonthlyCO2 = [Monthly CO2 (t)]
+RETURN
+MonthlyCO2 * [Current ETS Price]
+
+// ETS cost per kilometer
+[ETS Cost per km] = DIVIDE([ETS Cost (EUR)], [Total Distance (km)], 0)
+
+// Projected annual ETS cost
+[Annual ETS Cost (Projected)] = 
+VAR DaysInData = DATEDIFF(MIN(TripFacts[StartTimeUTC]), MAX(TripFacts[StartTimeUTC]), DAY)
+VAR DailyCO2 = DIVIDE([CO2 Emissions (t)], DaysInData, 0)
+VAR AnnualCO2 = DailyCO2 * 365
+RETURN
+AnnualCO2 * [Current ETS Price]
+
+// =============================================================================
+// 4. FUEL COST MEASURES
+// =============================================================================
+
+// Total fuel cost from invoices
+[Total Fuel Cost] = SUMX(FuelInvoices, FuelInvoices[EUR_Amount])
+
+// Average fuel price per liter
+[Avg Fuel Price per L] = DIVIDE([Total Fuel Cost], SUM(FuelInvoices[Litres]), 0)
+
+// Monthly fuel cost
+[Monthly Fuel Cost] = 
+VAR CurrentMonth = SELECTEDVALUE('Date'[Month])
+VAR FilteredInvoices = FILTER(FuelInvoices, MONTH(FuelInvoices[InvoiceMonth]) = CurrentMonth)
+RETURN
+SUMX(FilteredInvoices, FilteredInvoices[EUR_Amount])
+
+// Fuel cost per kilometer
+[Fuel Cost per km] = DIVIDE([Total Fuel Cost], [Total Distance (km)], 0)
+
+// =============================================================================
+// 5. SCENARIO ANALYSIS MEASURES
+// =============================================================================
+
+// Current scenario selection
+[Selected Scenario] = SELECTEDVALUE('Scenario Parameter'[Scenario Parameter])
+
+// Scenario metrics (filtered by selected scenario)
+[Scenario CapEx] = 
+VAR CurrentScenario = [Selected Scenario]
+VAR ScenarioData = FILTER(ScenarioRun, ScenarioRun[ScenarioID] = CurrentScenario)
+RETURN
+SUMX(ScenarioData, ScenarioRun[CapEx_EUR])
+
+[Scenario OpEx] = 
+VAR CurrentScenario = [Selected Scenario]
+VAR ScenarioData = FILTER(ScenarioRun, ScenarioRun[ScenarioID] = CurrentScenario)
+RETURN
+SUMX(ScenarioData, ScenarioRun[OpEx_EUR])
+
+[Scenario CO2 Reduction] = 
+VAR CurrentScenario = [Selected Scenario]
+VAR ScenarioData = FILTER(ScenarioRun, ScenarioRun[ScenarioID] = CurrentScenario)
+RETURN
+SUMX(ScenarioData, ScenarioRun[CO2_Reduction_t])
+
+[Scenario ETS Savings] = 
+VAR CurrentScenario = [Selected Scenario]
+VAR ScenarioData = FILTER(ScenarioRun, ScenarioRun[ScenarioID] = CurrentScenario)
+RETURN
+SUMX(ScenarioData, ScenarioRun[ETS_Savings_EUR])
+
+[Scenario NPV] = 
+VAR CurrentScenario = [Selected Scenario]
+VAR ScenarioData = FILTER(ScenarioRun, ScenarioRun[ScenarioID] = CurrentScenario)
+RETURN
+SUMX(ScenarioData, ScenarioRun[NPV_EUR])
+
+[Scenario ROI] = 
+VAR CurrentScenario = [Selected Scenario]
+VAR ScenarioData = FILTER(ScenarioRun, ScenarioRun[ScenarioID] = CurrentScenario)
+RETURN
+AVERAGEX(ScenarioData, ScenarioRun[ROI_Percent])
+
+[Scenario Payback] = 
+VAR CurrentScenario = [Selected Scenario]
+VAR ScenarioData = FILTER(ScenarioRun, ScenarioRun[ScenarioID] = CurrentScenario)
+RETURN
+AVERAGEX(ScenarioData, ScenarioRun[Payback_Years])
+
+// Vehicles to be replaced in scenario
+[Vehicles Replaced] = 
+VAR CurrentScenario = [Selected Scenario]
+VAR ScenarioData = FILTER(ScenarioRun, ScenarioRun[ScenarioID] = CurrentScenario)
+RETURN
+SUMX(ScenarioData, ScenarioRun[VehiclesReplaced])
+
+// =============================================================================
+// 6. PERFORMANCE INDICATORS
+// =============================================================================
+
+// Fleet utilization rate
+[Fleet Utilization] = 
+VAR TotalPossibleTrips = [Fleet Size] * DATEDIFF(MIN(TripFacts[StartTimeUTC]), MAX(TripFacts[StartTimeUTC]), DAY) * 30
+RETURN
+DIVIDE([Total Trips], TotalPossibleTrips, 0)
+
+// Average trips per vehicle per day
+[Avg Trips per Vehicle per Day] = 
+VAR Days = DATEDIFF(MIN(TripFacts[StartTimeUTC]), MAX(TripFacts[StartTimeUTC]), DAY)
+RETURN
+DIVIDE([Total Trips], [Fleet Size] * Days, 0)
+
+// Compliance rate (assuming 95% is target)
+[Compliance Rate] = 
+VAR TargetEfficiency = 28.0  // L/100km target
+VAR ActualEfficiency = [Fleet Efficiency (L/100km)]
+RETURN
+IF(ActualEfficiency <= TargetEfficiency, 1.0, TargetEfficiency / ActualEfficiency)
+
+// =============================================================================
+// 7. COMPARATIVE ANALYSIS
+// =============================================================================
+
+// Previous period comparison
+[CO2 vs Previous Period] = 
+VAR CurrentPeriodCO2 = [CO2 Emissions (t)]
+VAR PreviousPeriodCO2 = CALCULATE([CO2 Emissions (t)], DATEADD('Date'[Date], -1, MONTH))
+RETURN
+DIVIDE(CurrentPeriodCO2 - PreviousPeriodCO2, PreviousPeriodCO2, 0)
+
+[ETS Cost vs Previous Period] = 
+VAR CurrentPeriodCost = [ETS Cost (EUR)]
+VAR PreviousPeriodCost = CALCULATE([ETS Cost (EUR)], DATEADD('Date'[Date], -1, MONTH))
+RETURN
+DIVIDE(CurrentPeriodCost - PreviousPeriodCost, PreviousPeriodCost, 0)
+
+// Industry benchmark comparison
+[vs Industry Benchmark] = 
+VAR IndustryBenchmark = 30.0  // L/100km industry average
+VAR FleetPerformance = [Fleet Efficiency (L/100km)]
+RETURN
+DIVIDE(IndustryBenchmark - FleetPerformance, IndustryBenchmark, 0)
+
+// =============================================================================
+// 8. FORECASTING MEASURES
+// =============================================================================
+
+// ETS cost forecast (using price curve)
+[ETS Cost Forecast] = 
+VAR FutureMonths = FILTER(ETSPriceCurve, ETSPriceCurve[PriceMonth] >= TODAY())
+VAR AvgFuturePrice = AVERAGEX(FutureMonths, ETSPriceCurve[EUR_per_t])
+VAR ProjectedAnnualCO2 = [Annual ETS Cost (Projected)] / [Current ETS Price]
+RETURN
+ProjectedAnnualCO2 * AvgFuturePrice
+
+// Cost savings potential
+[Max Cost Savings Potential] = 
+VAR BestScenario = MAXX(ScenarioRun, ScenarioRun[ETS_Savings_EUR])
+VAR CurrentETSCost = [Annual ETS Cost (Projected)]
+RETURN
+MIN(BestScenario, CurrentETSCost * 0.8)  // Max 80% reduction
+
+// =============================================================================
+// 9. RISK ASSESSMENT MEASURES
+// =============================================================================
+
+// Price volatility risk
+[Price Volatility Risk] = 
+VAR PriceStdDev = STDEV.P(ETSPriceCurve[EUR_per_t])
+VAR AvgPrice = AVERAGE(ETSPriceCurve[EUR_per_t])
+RETURN
+DIVIDE(PriceStdDev, AvgPrice, 0)
+
+// Regulatory compliance risk
+[Compliance Risk Score] = 
+VAR ComplianceRate = [Compliance Rate]
+RETURN
+SWITCH(
+    TRUE(),
+    ComplianceRate >= 0.95, 1,  // Low risk
+    ComplianceRate >= 0.90, 2,  // Medium risk
+    ComplianceRate >= 0.85, 3,  // High risk
+    4  // Very high risk
+)
+
+// =============================================================================
+// 10. FORMATTING MEASURES
+// =============================================================================
+
+// Formatted display values
+[CO2 Display] = FORMAT([CO2 Emissions (t)], "#,##0.0") & " t"
+
+[ETS Cost Display] = "€" & FORMAT([ETS Cost (EUR)], "#,##0")
+
+[Efficiency Display] = FORMAT([Fleet Efficiency (L/100km)], "0.0") & " L/100km"
+
+[ROI Display] = FORMAT([Scenario ROI], "0.0%")
+
+[Payback Display] = FORMAT([Scenario Payback], "0.0") & " years"
+
+// =============================================================================
+// 11. CONDITIONAL FORMATTING VALUES
+// =============================================================================
+
+// Color coding for ROI heat map
+[ROI Color] = 
+VAR ROI = [Scenario ROI]
+RETURN
+SWITCH(
+    TRUE(),
+    ROI >= 20, "#00B050",      // Green for good ROI
+    ROI >= 10, "#FFC000",      // Yellow for moderate ROI
+    ROI >= 0, "#FF6600",       // Orange for low ROI
+    "#FF0000"                  // Red for negative ROI
+)
+
+// Status indicators
+[Compliance Status] = 
+VAR Rate = [Compliance Rate]
+RETURN
+IF(Rate >= 0.95, "✅ Compliant", IF(Rate >= 0.90, "⚠️ At Risk", "❌ Non-Compliant"))
+
+// =============================================================================
+// 12. AGGREGATION HELPERS
+// =============================================================================
+
+// Measures for time intelligence
+[YTD CO2] = TOTALYTD([CO2 Emissions (t)], 'Date'[Date])
+
+[MTD ETS Cost] = TOTALMTD([ETS Cost (EUR)], 'Date'[Date])
+
+[QTD Fuel Cost] = TOTALQTD([Total Fuel Cost], 'Date'[Date])
+
+// Running totals
+[Running Total CO2] = 
+CALCULATE(
+    [CO2 Emissions (t)],
+    FILTER(
+        ALL('Date'[Date]),
+        'Date'[Date] <= MAX('Date'[Date])
+    )
+)
+
+[Running Total ETS Cost] = 
+CALCULATE(
+    [ETS Cost (EUR)],
+    FILTER(
+        ALL('Date'[Date]),
+        'Date'[Date] <= MAX('Date'[Date])
+    )
+)
+
+// =============================================================================
+// End of Measures
+// =============================================================================
+// Usage Notes:
+// 1. These measures assume Direct Lake tables: TripFacts, FuelInvoices, ETSPriceCurve, ScenarioRun
+// 2. What-if parameters: 'ETS Price Parameter', 'Scenario Parameter' 
+// 3. Date table: 'Date' with standard date intelligence
+// 4. All monetary values in EUR, distances in km, fuel in liters
+// 5. CO2 conversion factor: 2.68 kg CO2 per liter diesel
+// ============================================================================= 
