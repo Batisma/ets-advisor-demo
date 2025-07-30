@@ -333,31 +333,31 @@ def show_scenario_cockpit(data, metrics):
     
     # Brief introduction
     st.markdown("""
-    ### 🎯 Fleet Upgrade Scenarios
+    ### Fleet Upgrade Scenarios
     Compare different strategies for modernizing your fleet to reduce costs and emissions.
     """)
     
     # Key terms in a compact format
-    with st.expander("📚 Key Terms"):
+    with st.expander("Key Terms"):
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("""
-            **💰 CapEx**: Upfront investment cost  
-            **📈 NPV**: Total profit/loss over 5 years  
-            **⏱️ Payback**: Time to recover investment  
+            **CapEx**: Upfront investment cost  
+            **NPV**: Total profit/loss over 5 years  
+            **Payback**: Time to recover investment  
             """)
         with col2:
             st.markdown("""
-            **🔧 OpEx**: Ongoing operational savings  
-            **📊 ROI**: Return on investment (%)  
-            **🌱 CO₂**: Emissions reduction in tons  
+            **OpEx**: Ongoing operational savings  
+            **ROI**: Return on investment (%)  
+            **CO₂**: Emissions reduction in tons  
             """)
     
     if 'scenarios' in data and len(data['scenarios']) > 0:
         scenarios = data['scenarios']
         
         # Scenario selection
-        st.subheader("🚛 Select Scenario to Analyze")
+        st.subheader("Select Scenario to Analyze")
         scenario_names = scenarios['ScenarioName'].tolist()
         selected_scenario = st.selectbox("Choose scenario:", scenario_names)
         
@@ -366,9 +366,9 @@ def show_scenario_cockpit(data, metrics):
         
         # Scenario descriptions
         descriptions = {
-            "Conservative Replacement": "🐢 Low-risk: Replace oldest trucks with efficient models",
-            "Aggressive Electrification": "⚡ High-impact: Large-scale electric vehicle adoption", 
-            "Hybrid Approach": "⚖️ Balanced: Mix of efficient diesel and electric vehicles"
+            "Conservative Replacement": "Low-risk: Replace oldest trucks with efficient models",
+            "Aggressive Electrification": "High-impact: Large-scale electric vehicle adoption", 
+            "Hybrid Approach": "Balanced: Mix of efficient diesel and electric vehicles"
         }
         
         st.info(descriptions.get(selected_scenario, "Fleet modernization scenario"))
@@ -377,8 +377,7 @@ def show_scenario_cockpit(data, metrics):
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            npv_delta = "📈" if scenario_data['NPV_EUR'] > 0 else "📉"
-            st.metric("Net Present Value", f"€{scenario_data['NPV_EUR']:,.0f}", delta=npv_delta)
+            st.metric("Net Present Value", f"€{scenario_data['NPV_EUR']:,.0f}")
         
         with col2:
             st.metric("Return on Investment", f"{scenario_data['ROI_Percent']:.1f}%")
@@ -390,7 +389,7 @@ def show_scenario_cockpit(data, metrics):
             st.metric("CO₂ Saved", f"{scenario_data['CO2_Reduction_t']:,.0f} tons")
         
         # Investment overview
-        st.subheader("💰 Investment Overview")
+        st.subheader("Investment Overview")
         
         col1, col2 = st.columns(2)
         
@@ -430,7 +429,7 @@ def show_scenario_cockpit(data, metrics):
             st.plotly_chart(fig_timeline, use_container_width=True)
         
         # Scenario comparison
-        st.subheader("📊 Compare All Scenarios")
+        st.subheader("Compare All Scenarios")
         
         # Simple comparison table
         comparison_df = scenarios[['ScenarioName', 'VehiclesReplaced', 'CapEx_EUR', 'NPV_EUR', 'ROI_Percent', 'Payback_Years']].copy()
@@ -473,7 +472,7 @@ def show_scenario_cockpit(data, metrics):
         }
         
         if selected_scenario in pros_cons:
-            st.subheader(f"✅ {selected_scenario} - Pros & Cons")
+            st.subheader(f"{selected_scenario} - Pros & Cons")
             col1, col2 = st.columns(2)
             
             with col1:
