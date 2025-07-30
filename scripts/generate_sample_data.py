@@ -38,7 +38,7 @@ Faker.seed(RANDOM_SEED)
 # Fleet configuration
 NUM_TRUCKS = 40
 NUM_DAYS = 90
-TRIPS_PER_DAY_RANGE = (25, 35)  # Average 30 trips per day per truck
+TRIPS_PER_DAY_RANGE = (2, 3)  # Average 2-3 trips per day per truck - realistic yearly values
 BASE_DATE = datetime(2024, 1, 1)
 
 # European cities for route simulation
@@ -100,8 +100,8 @@ def generate_trip_facts(vins: list, num_days: int) -> pd.DataFrame:
             # Number of trips per truck per day (varies by day of week)
             if current_date.weekday() < 5:  # Weekdays
                 num_trips = random.randint(TRIPS_PER_DAY_RANGE[0], TRIPS_PER_DAY_RANGE[1])
-            else:  # Weekends
-                num_trips = random.randint(5, 15)
+            else:  # Weekends (reduced activity)
+                num_trips = random.randint(0, 2)
             
             # Generate trips for this truck on this day
             for trip_num in range(num_trips):

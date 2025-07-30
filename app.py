@@ -69,25 +69,44 @@ st.markdown("""
 def display_main_logo():
     """Display the main logo header"""
     try:
-        logo = Image.open("assets/ets_advisor_logo.png")
+        # Try Magellan logo first
+        logo = Image.open("Logo Mag.webp")
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            st.image(logo, width=400)
+            st.image(logo, width=200)
     except FileNotFoundError:
-        st.markdown('<div class="main-header">🚛 ETS Impact Advisor</div>', unsafe_allow_html=True)
+        try:
+            # Fallback to ETS logo
+            logo = Image.open("assets/ets_advisor_logo.png")
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col2:
+                st.image(logo, width=400)
+        except FileNotFoundError:
+            st.markdown('<div class="main-header">🚛 ETS Impact Advisor</div>', unsafe_allow_html=True)
 
 def display_page_logo(page_title):
     """Display the page logo with centered title"""
     try:
-        logo = Image.open("assets/ets_advisor_logo.png")
+        # Try Magellan logo first
+        logo = Image.open("Logo Mag.webp")
         # Center the logo
         col1, col2, col3 = st.columns([1, 1, 1])
         with col2:
-            st.image(logo, width=150)
+            st.image(logo, width=120)
         # Center the title
         st.markdown(f'<div style="text-align: center; font-size: 2.5rem; font-weight: bold; color: #2c5aa0; margin: 1rem 0;">{page_title}</div>', unsafe_allow_html=True)
     except FileNotFoundError:
-        st.markdown(f'<div style="text-align: center; font-size: 2.5rem; font-weight: bold; color: #2c5aa0; margin: 1rem 0;">{page_title}</div>', unsafe_allow_html=True)
+        try:
+            # Fallback to ETS logo
+            logo = Image.open("assets/ets_advisor_logo.png")
+            # Center the logo
+            col1, col2, col3 = st.columns([1, 1, 1])
+            with col2:
+                st.image(logo, width=150)
+            # Center the title
+            st.markdown(f'<div style="text-align: center; font-size: 2.5rem; font-weight: bold; color: #2c5aa0; margin: 1rem 0;">{page_title}</div>', unsafe_allow_html=True)
+        except FileNotFoundError:
+            st.markdown(f'<div style="text-align: center; font-size: 2.5rem; font-weight: bold; color: #2c5aa0; margin: 1rem 0;">{page_title}</div>', unsafe_allow_html=True)
 
 # Data loading function
 @st.cache_data
@@ -153,14 +172,14 @@ def main():
     st.sidebar.title("Navigation")
     page = st.sidebar.selectbox(
         "Select Page",
-        ["Fleet Digital Twin", "ETS Cost Simulator", "Scenario Cockpit", "Compliance Centre"]
+        ["Fleet Management Overview", "ETS Cost Simulator", "Scenario Cockpit", "Compliance Centre"]
     )
     
     # Calculate metrics
     metrics = calculate_metrics(data)
     
     # Display selected page
-    if page == "Fleet Digital Twin":
+    if page == "Fleet Management Overview":
         show_fleet_digital_twin(data, metrics)
     elif page == "ETS Cost Simulator":
         show_ets_cost_simulator(data, metrics)
@@ -170,8 +189,8 @@ def main():
         show_compliance_centre(data, metrics)
 
 def show_fleet_digital_twin(data, metrics):
-    """Fleet Digital Twin page"""
-    display_page_logo("Fleet Digital Twin")
+    """Fleet Management Overview page"""
+    display_page_logo("Fleet Management Overview")
     
     # Key metrics row
     col1, col2, col3, col4 = st.columns(4)
